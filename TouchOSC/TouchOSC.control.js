@@ -18,7 +18,9 @@ function touchOSC() {
   this.HIGHEST_CC = 20;
 	this.FADERS = 101; // Start of Fader Range
 	this.PANS = 91; // Start of Pan Range
+	this.XY = 12; // Start of the XY Pads
 	this.MACROS = 20; // Start of Device Macro Range
+	this.PARAMS = 40; // Start of Device Parameter Mappings
 
 	// Midi Port:
 	this.midiIn = host.getMidiInPort(0).createNoteInput("TouchOSC", "??????");
@@ -44,6 +46,11 @@ function touchOSC() {
 	this.trackExists = [];
 	this.deviceMacro = [];
 	this.deviceMacroHasChanged = [];
+	this.deviceMapping = [];
+	this.deviceMappingHasChanged = [];
+	this.pageNames = [];
+	this.xyPad = [];
+	this.xyPadHasChanged = [];
 	for (var i=0; i<8; i++) {
 		this.trackVolume[i] = 0;
 		this.trackVolumeHasChanged[i] = false;
@@ -51,6 +58,10 @@ function touchOSC() {
 		this.trackPanHasChanged[i] = false;
 		this.deviceMacro[i] = 0;
 		this.deviceMacroHasChanged[i] = false;
+		this.deviceMapping[i] = 0;
+		this.deviceMappingHasChanged[i] = false;
+		this.xyPad[i] = 0;
+		this.xyPadHasChanged[i] = false;
 		this.trackExists[i] = false;
 	}
 	this.trackHasChanged = false;
@@ -58,6 +69,7 @@ function touchOSC() {
 	this.presetHasChanged = false;
 	this.categoryHasChanged = false;
 	this.creatorHasChanged = false;
+	this.pPageHasChanged = false;
 }
 
 
@@ -97,7 +109,10 @@ function init()
 	tOSC.tracks = host.createMainTrackBank(8, 0, 0);
 	tOSC.cTrack = host.createCursorTrack(1, 0);
 	tOSC.cDevice = tOSC.cTrack.getPrimaryDevice();
+	tOSC.uMap = host.createUserControls(8);
 	tOSC.cMacro = [];
+	tOSC.cPage = [];
+
 
 	for (var i=0; i<8; i++) {
 		// Volume
@@ -110,6 +125,13 @@ function init()
 		tOSC.cMacro[i] = tOSC.cDevice.getMacro(i);
 		tOSC.cMacro[i].getAmount().setIndication(true);
 		tOSC.cMacro[i].getAmount().addValueObserver(127, getTrackValueFunc(i, tOSC.deviceMacro, tOSC.deviceMacroHasChanged));
+		// Parameter Mapping
+		tOSC.cPage[i] = tOSC.cDevice.getParameter(i);
+		tOSC.cPage[i].setIndication(true);
+		tOSC.cPage[i].addValueObserver(127, getTrackValueFunc(i, tOSC.deviceMapping, tOSC.deviceMappingHasChanged));
+		// XY Pads
+		tOSC.uMap.getControl(i).setLabel("XY Pad " + (Math.ceil(i/2+0.2)) + " - " + ((i%2<1) ? "X":"Y"))
+		tOSC.uMap.getControl(i).addValueObserver(127, getTrackValueFunc(i, tOSC.xyPad, tOSC.xyPadHasChanged));
 	}
 
 	tOSC.cDevice.addPresetNameObserver(50, "None", function(on)
@@ -145,6 +167,20 @@ function init()
 		if(tOSC.trackHasChanged) {
 			host.showPopupNotification(on);
 			tOSC.trackHasChanged = false;
+		}
+	});
+	tOSC.cDevice.addPageNamesObserver(function(names)
+	{
+		tOSC.pageNames = [];
+		for(var i=0; i<arguments.length; i++) {
+			tOSC.pageNames[i] = arguments[i];
+		}
+	});
+	tOSC.cDevice.addSelectedPageObserver(0, function(on)
+	{
+		if(tOSC.pPageHasChanged) {
+			host.showPopupNotification(tOSC.pageNames[on]);
+			tOSC.pPageHasChanged = false;
 		}
 	});
 
@@ -194,13 +230,22 @@ function flush()
 				 sendChannelController(0, tOSC.MACROS + k, tOSC.deviceMacro[k]);
 				 tOSC.deviceMacroHasChanged[k] = false;
 			}
+			else if (tOSC.deviceMappingHasChanged[k]) {
+				 sendChannelController(0, tOSC.PARAMS + k, tOSC.deviceMapping[k]);
+				 tOSC.deviceMappingHasChanged[k] = false;
+			}
+			else if (tOSC.xyPadHasChanged[k]) {
+				 sendChannelController(0, tOSC.XY + k, tOSC.xyPad[k]);
+				 printMidi(0,tOSC.XY + k, tOSC.xyPad[k]);
+				 tOSC.xyPadHasChanged[k] = false;
+			}
 	 }
 }
 
 // Update the UserControls when Midi Data is received
 function onMidi(status, data1, data2)
 {
-	 printMidi(status, data1, data2);
+	 //printMidi(status, data1, data2);
 
    if (isChannelController(status))
    {
@@ -222,6 +267,12 @@ function onMidi(status, data1, data2)
 			}
 			else if (data1 >= tOSC.MACROS && data1 < tOSC.MACROS + 8 ) {
 				tOSC.cMacro[data1 - tOSC.MACROS].getAmount().set(data2, 128);
+			}
+			else if (data1 >= tOSC.PARAMS && data1 < tOSC.PARAMS + 8 ) {
+				tOSC.cPage[data1 - tOSC.PARAMS].set(data2, 128);
+			}
+			else if (data1 >= tOSC.XY && data1 < tOSC.XY + 8 ) {
+				tOSC.uMap.getControl(data1 - tOSC.XY).set(data2, 128);
 			}
       else if (data2 > 0)
       {
@@ -272,6 +323,14 @@ function onMidi(status, data1, data2)
 					case 38:
 						tOSC.cDevice.switchToNextPresetCreator();
 						tOSC.creatorHasChanged = true;
+					break;
+					case 50:
+						tOSC.cDevice.previousParameterPage();
+						tOSC.pPageHasChanged = true;
+					break;
+					case 51:
+						tOSC.cDevice.nextParameterPage();
+						tOSC.pPageHasChanged = true;
 					break;
          case 117:
             tOSC.transport.stop();
