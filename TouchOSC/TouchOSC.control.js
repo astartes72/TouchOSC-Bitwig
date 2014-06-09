@@ -9,26 +9,36 @@ host.addDeviceNameBasedDiscoveryPair(["TouchOSC Bridge"], ["TouchOSC Bridge"]);
 // Main variable:
 var tOSC;
 
+
+
+
+
+
 // Main Setup Function:
 function touchOSC() {
   tOSC = this;
 
   // Constants:
-  this.LOWEST_CC = 1;
-  this.HIGHEST_CC = 20;
-	this.FADERS = 101; // Start of Fader Range
-	this.PANS = 91; // Start of Pan Range
-	this.XY = 12; // Start of the XY Pads
-	this.MACROS = 20; // Start of Device Macro Range
-	this.PARAMS = 40; // Start of Device Parameter Mappings
+  //this.LOWEST_CC = 1;
+  //this.HIGHEST_CC = 20;
+	this.FADERS = 101; // Start of Fader Range - 8 x track volume + 1 x master volume
+	this.PANS = 91; // Start of Pan Range - 8 x track pan
+	this.XY = 12; // Start of the XY Pads - 4 x X and Y, 8 total
+	this.MACROS = 20; // Start of Device Macro Range - 8 macro knobs on the cursor device
+	this.PARAMS = 40; // Start of Device Parameter Mappings - 8 parameter mappings on the cursor device
+	this.PADCENTER = 36; // Start Offset of Pads
+	this.PADSTEP = 16; // Pad Pagesize per Step
+	this.KEYCENTER = 36; // Start Offset of Pads
+	this.KEYSTEP = 12; // Pad Pagesize per Step
 
 	// Midi Port:
-	this.midiIn = host.getMidiInPort(0).createNoteInput("TouchOSC", "??????");
+	this.midiInKeys = host.getMidiInPort(0).createNoteInput("TouchOSC Keys", "?0????");
+	this.midiInPads = host.getMidiInPort(0).createNoteInput("TouchOSC Pads", "?9????");
 
 	// States:
 // Two array-variables to hold the values of all the CCs and to check if they have changed
-	this.ccValue = initArray(0, ((tOSC.HIGHEST_CC - tOSC.LOWEST_CC + 1)*16));
-  this.ccValueOld = initArray(0, ((tOSC.HIGHEST_CC - tOSC.LOWEST_CC + 1)*16));
+	//this.ccValue = initArray(0, ((tOSC.HIGHEST_CC - tOSC.LOWEST_CC + 1)*16));
+  //this.ccValueOld = initArray(0, ((tOSC.HIGHEST_CC - tOSC.LOWEST_CC + 1)*16));
 
 	// Transport:
 	this.isPlaying = false;
@@ -70,6 +80,11 @@ function touchOSC() {
 	this.categoryHasChanged = false;
 	this.creatorHasChanged = false;
 	this.pPageHasChanged = false;
+
+	this.padTranslation = initArray(0, 128);
+	this.padOffset = 0;
+	this.keyTranslation = initArray(0, 128);
+	this.keyOffset = 0;
 }
 
 
@@ -78,7 +93,8 @@ function init()
 	new touchOSC()
 
 	// Disable the consuming of events by the NoteInputs, so they are also available for mapping
-	tOSC.midiIn.setShouldConsumeEvents(false);
+	tOSC.midiInKeys.setShouldConsumeEvents(false);
+	tOSC.midiInPads.setShouldConsumeEvents(false);
 
 	// Setting Callbacks for Midi and Sysex
 	host.getMidiInPort(0).setMidiCallback(onMidi);
@@ -193,19 +209,6 @@ function init()
 // without drowning the Controller with data
 function flush()
 {
-//   for(var i=tOSC.LOWEST_CC; i<=tOSC.HIGHEST_CC; i++)
-//   {
-//			for (var j=1; j<=16; j++) {
-//				 var c = i - tOSC.LOWEST_CC + (j-1) * (tOSC.HIGHEST_CC-tOSC.LOWEST_CC+1);
-//				 // Check if something has changed
-//				 if (tOSC.ccValue[c] != tOSC.ccValueOld[c]) {
-//						// If yes, send the updated value
-//						sendChannelController(j-1, i, tOSC.ccValue[c]);
-//						// And update the value for the next check
-//						tOSC.ccValueOld[c] = tOSC.ccValue[c];
-//				 }
-//			}
-//   }
 	 if (tOSC.transpHasChanged) {
 			sendChannelController(0, 118, tOSC.isPlaying ? 127 : 0);
 			sendChannelController(0, 117, tOSC.isPlaying ? 0 : 127);
@@ -216,6 +219,7 @@ function flush()
 	 if (tOSC.masterVolumeHasChanged) {
 			sendChannelController(0, tOSC.FADERS + 8, tOSC.masterVolume);
 			tOSC.masterVolumeHasChanged = false;
+			return;
 	 }
 	 for (var k=0; k<8; k++) {
 			if (tOSC.trackVolumeHasChanged[k]) {
@@ -332,6 +336,34 @@ function onMidi(status, data1, data2)
 						tOSC.cDevice.nextParameterPage();
 						tOSC.pPageHasChanged = true;
 					break;
+					case 53:
+						if (tOSC.keyOffset < 127-tOSC.KEYCENTER-tOSC.KEYSTEP) {
+							tOSC.keyOffset += tOSC.KEYSTEP;
+							setNoteTable(tOSC.midiInKeys, tOSC.keyTranslation, tOSC.keyOffset);
+							println("up");
+						}
+					break;
+					case 54:
+						if (tOSC.keyOffset > 0-tOSC.KEYCENTER+tOSC.KEYSTEP-1) {
+							tOSC.keyOffset -= tOSC.KEYSTEP;
+							setNoteTable(tOSC.midiInKeys, tOSC.keyTranslation, tOSC.keyOffset);
+							println("down");
+						}
+					break;
+					case 55:
+						if (tOSC.padOffset < 127-tOSC.PADCENTER-tOSC.PADSTEP) {
+							tOSC.padOffset += tOSC.PADSTEP;
+							setNoteTable(tOSC.midiInPads, tOSC.padTranslation, tOSC.padOffset);
+							println("up");
+						}
+					break;
+					case 56:
+						if (tOSC.padOffset > 0-tOSC.PADCENTER+tOSC.PADSTEP-1) {
+							tOSC.padOffset -= tOSC.PADSTEP;
+							setNoteTable(tOSC.midiInPads, tOSC.padTranslation, tOSC.padOffset);
+							println("down");
+						}
+					break;
          case 117:
             tOSC.transport.stop();
             break;
@@ -379,6 +411,18 @@ function getTrackValueFunc(index, varToStore, varToSet)
 			varToSet[index] = true;
    }
 }
+
+function setNoteTable(midiIn, table, offset) {
+  for (var i = 0; i < 128; i++)
+	{
+		table[i] = offset + i;
+		if (table[i] < 0 || table[i] > 127) {
+			table[i] = -1;
+		}
+	}
+	midiIn.setKeyTranslationTable(table);
+}
+
 
 function exit()
 {
