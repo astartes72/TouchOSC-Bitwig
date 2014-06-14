@@ -26,6 +26,9 @@ Script Based on the Multi Bi-Directional Script from Thomas Henzle.
 
 Basic TouchOSC Layout by Astartes, improved and extended a lot by Thomas Helzle ;-)
 
+Find Screenshots of the Layout here:
+https://github.com/ThomasHelzle/TouchOSC-Bitwig/wiki
+
 Enjoy!
 
 Tom
