@@ -3,6 +3,9 @@ TouchOSC-Bitwig
 
 Mappings and Script for Touch OSC and Bitwig
 
+http://hexler.net/software/touchosc
+http://hexler.net/software/touchosc-android
+
 Features:
 
 - Mixer Page with Transport Controls, Track and Master Volume, Pan.
