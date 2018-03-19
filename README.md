@@ -1,6 +1,8 @@
 TouchOSC-Bitwig
 ===============
 
+EDIT: THIS WAS AN EARLY SCRIPT FOR BITWIG 1.0. IT'S NO LONGER MAINTAINED AND MAY OR MAY NOT WORK WITH CURRENT VERSIONS
+
 Mappings and Script for Touch OSC and Bitwig
 
 - http://hexler.net/software/touchosc
